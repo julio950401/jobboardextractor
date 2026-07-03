@@ -14,14 +14,14 @@ function bodyReader(){
     return {header, description}
 }
 
-function urlReader(url) {
+function urlReader(job, config) {
     const patterns = [
         /https:\/\/mx\.indeed\.com\/pagead\/clk\?mo/ , 
         /https:\/\/mx\.indeed\.com\/rc\/clk\?jk/
     ]
     
     for (const pattern of patterns) {
-        if (url.match(pattern)) return newJob(url, SOURCE)
+        if (job.url.match(pattern)) return newJob(job.url, SOURCE)
     }
 
     return undefined

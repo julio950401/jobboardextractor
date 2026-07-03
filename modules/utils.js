@@ -38,3 +38,11 @@ export function randomMiliseconds(minimum, maximum) {
 export function uniqueByKey(array, key){
   return Array.from(new Map(array.map(x => [x[key], x])).values());
 }
+
+export function normalizeText(text) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ñ/g, "n");
+}

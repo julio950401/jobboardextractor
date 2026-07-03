@@ -1,11 +1,3 @@
-async function download(){
-  const state = await chrome.runtime.sendMessage({action: "get_state"});
-  const json = JSON.stringify(state.jobs, null, 2);
-  const blob = new Blob([json], {type: "application/json"});
-  const objUrl = URL.createObjectURL(blob);
-  await chrome.downloads.download({url: objUrl, filename: "jobs.json"});
-}
-
 function getElement(name){
   return document.getElementById(name)
 }
@@ -13,8 +5,8 @@ function getElement(name){
 function findjobsInInput(){
   return getElement("jobs").value
     .split(/\r?\n/)
-    .map(x => x.trim())
-    .filter(x => x !== "");
+    .map(x => ({url: x.trim(), header: ""}))
+    .filter(x => x.url !== "")
 }
 
 async function findjobsInTab(){
@@ -27,19 +19,35 @@ async function findjobsInTab(){
       const anchors = document.querySelectorAll("a[href]");
       if (!anchors || anchors.length === 0) return [];
       return Array.from(anchors)
-        // .filter(a => {
-        //   if (a.href.includes("jobs.lever.co/bluelightconsulting")) return a.innerText.trim().toLowerCase().includes("mexico")
-        //   else return true
-        //   return true
-        // })
-        .map(a => a.href)
-        .filter(Boolean);
+      .map(a => ({url: a.href, header: a.innerText.trim()}))
+      .filter(Boolean);
     }
   });
-  return results?.[0]?.result ?? [];
+  const inputs = results?.[0]?.result ?? []
+
+  const state = await chrome.runtime.sendMessage({action: "get_state"});
+
+  const outputs = []
+  for (const input of inputs) {
+    const output = await chrome.runtime.sendMessage({
+      action: "extract_jobs", 
+      jobs: [input], 
+      config: state.config
+    });
+    if(output) outputs.push(...output)
+  }
+  await chrome.runtime.sendMessage({action: "add", jobs: outputs});
 }
 
 async function refresh(state){
+
+  const orEl = getElement("or")
+  orEl.value = state.config.header.or.join(", ")
+  const andEl = getElement("and")
+  andEl.value = state.config.header.and.join(", ")
+  const and_notEl = getElement("and_not")
+  and_notEl.value = state.config.header.and_not.join(", ")
+
   const totalEl = getElement("total")
   totalEl.innerHTML = "TOTAL LINKS: "+ state.jobs.length
 
@@ -54,15 +62,15 @@ async function refresh(state){
     if (job.description.length>0) logEl.value += "\n" + job.url
   }
 
-  const stateEl = getElement("state")
+  const statusEl = getElement("status")
   const lastEl = getElement("last")
   lastEl.value = ""
     
   const processed = state.jobs.filter(x=> x.header.length>0)
 
-  stateEl.innerHTML = "PROCESS: STOPPED"
+  statusEl.innerHTML = "PROCESS: STOPPED"
   if (state.running){
-    stateEl.innerHTML = `PROCESS: RUNNING ${processed.length}/${state.jobs.length}`
+    statusEl.innerHTML = `PROCESS: RUNNING ${processed.length}/${state.jobs.length}`
     logEl.scrollTop = logEl.scrollHeight;
   }
 
@@ -71,36 +79,56 @@ async function refresh(state){
     lastEl.value = last.header+ "\n\n" + last.description
   } 
 }
-
-window.onload = async () => {
+async function onLoad(){
   const state = await chrome.runtime.sendMessage({action: "get_state"});
   await refresh(state)
-};
-
-chrome.runtime.onMessage.addListener(async (result) => {await refresh(result.state)});
-
-getElement("clean").addEventListener("click", async () => {
+}
+async function saveConfig(){
+  const split = (str) => str.split(',').map(s => s.trim()).filter(s => s.length > 0);
+  config ={
+    duration:{
+      min:Number(getElement("minimum").value), 
+      max:Number(getElement("maximum").value)
+    }
+    , header: {
+      or: split(getElement("or").value), 
+      and: split(getElement("and").value), 
+      and_not: split(getElement("and_not").value)
+    }
+  }
+  console.log("save_config config",config)
+  await chrome.runtime.sendMessage({action: "save_config", config });
+}
+async function clean(){
+  await saveConfig();
   await chrome.runtime.sendMessage({action: "clean"});
-});
+}
+async function add(){
+  await saveConfig();
+  await findjobsInTab();
+}
+async function edit(){
+  const jobs = await findjobsInInput()
+  await chrome.runtime.sendMessage({action: "update", jobs: jobs });
+}
+async function run(){
+  const jobs = await findjobsInInput()
+  await chrome.runtime.sendMessage({action: "update", jobs: jobs });
+  await chrome.runtime.sendMessage({action: "process"});
+}
+async function download(){
+  const state = await chrome.runtime.sendMessage({action: "get_state"});
+  const json = JSON.stringify(state.jobs, null, 2);
+  const blob = new Blob([json], {type: "application/json"});
+  const objUrl = URL.createObjectURL(blob);
+  await chrome.downloads.download({url: objUrl, filename: "jobs.json"});
+}
 
-getElement("add").addEventListener("click", async () => {
-  const urls = await findjobsInTab()
-  await chrome.runtime.sendMessage({action: "add", urls: urls});
-}); 
-
-getElement("edit").addEventListener("click", async () => {
-  const urls = await findjobsInInput()
-  await chrome.runtime.sendMessage({action: "edit", urls: urls });
-});
-
-getElement("run").addEventListener("click", async () => {
-  const urls = await findjobsInInput()
-  await chrome.runtime.sendMessage({action: "edit", urls: urls });
-
-  const min = Number(getElement("minimum").value)
-  const max = Number(getElement("maximum").value)
-  const config ={duration:{min, max} }
-  await chrome.runtime.sendMessage({action: "process", config});
-});
-
+window.onload = async () => { onLoad()};
+chrome.runtime.onMessage.addListener(async (result) => {await refresh(result.state)});
+getElement("save_config").addEventListener("click", async () => {await saveConfig();});
+getElement("clean").addEventListener("click", async () => {await clean();});
+getElement("add").addEventListener("click", async () => {await add();}); 
+getElement("edit").addEventListener("click", async () => {await edit();});
+getElement("run").addEventListener("click", async () => {await run()});
 getElement("download").addEventListener("click", async () => await download());

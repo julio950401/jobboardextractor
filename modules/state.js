@@ -10,7 +10,11 @@
  */
 
 export function emptyState(){
-  return {running: false, jobs:[]}
+  return {
+    running: false,
+    jobs:[], 
+    config: {duration:{min: 5000, max: 10000}, header: {or: [],  and: [], and_not: []}
+  }}
 }
 export function newJob(url, source) {
   return {url, source, header:'', description:'', error:''}

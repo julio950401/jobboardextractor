@@ -18,9 +18,9 @@ function bodyReader(){
     return {header, description}
 }
 
-function urlReader(url) {
+function urlReader(job, config) {
     const regex =/^https?:\/\/jobs\.workable\.com\/view\/[A-Za-z0-9]+/;
-    const match = url.match(regex);
+    const match = job.url.match(regex);
     if (match) return newJob(match[0], SOURCE)
     return undefined
 }
