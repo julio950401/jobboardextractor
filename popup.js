@@ -2,41 +2,11 @@ function getElement(name){
   return document.getElementById(name)
 }
 
-function findjobsInInput(){
+function findLinesInInput(){
   return getElement("jobs").value
     .split(/\r?\n/)
     .map(x => ({url: x.trim(), header: ""}))
     .filter(x => x.url !== "")
-}
-
-async function findjobsInTab(){
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) return [];
-
-  const results = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    function: () => {
-      const anchors = document.querySelectorAll("a[href]");
-      if (!anchors || anchors.length === 0) return [];
-      return Array.from(anchors)
-      .map(a => ({url: a.href, header: a.innerText.trim()}))
-      .filter(Boolean);
-    }
-  });
-  const inputs = results?.[0]?.result ?? []
-
-  const state = await chrome.runtime.sendMessage({action: "get_state"});
-
-  const outputs = []
-  for (const input of inputs) {
-    const output = await chrome.runtime.sendMessage({
-      action: "extract_jobs", 
-      jobs: [input], 
-      config: state.config
-    });
-    if(output) outputs.push(...output)
-  }
-  await chrome.runtime.sendMessage({action: "add", jobs: outputs});
 }
 
 async function refresh(state){
@@ -47,6 +17,8 @@ async function refresh(state){
   andEl.value = state.config.header.and.join(", ")
   const and_notEl = getElement("and_not")
   and_notEl.value = state.config.header.and_not.join(", ")
+  const linesEl = getElement("lines")
+  linesEl.value = state.config.lines.join("\n")
 
   const totalEl = getElement("total")
   totalEl.innerHTML = "TOTAL LINKS: "+ state.jobs.length
@@ -56,8 +28,7 @@ async function refresh(state){
   jobsEl.value = ""
   logEl.value  = ""
 
-  for (let i = 0; i < state.jobs.length; i++) {
-    const job = state.jobs[i]
+  for (const job of state.jobs) {
     jobsEl.value += "\n"+job.url
     if (job.description.length>0) logEl.value += "\n" + job.url
   }
@@ -66,12 +37,17 @@ async function refresh(state){
   const lastEl = getElement("last")
   lastEl.value = ""
     
-  const processed = state.jobs.filter(x=> x.header.length>0)
+  const processed = state.jobs.filter(x=> x.description.length>0)
 
-  statusEl.innerHTML = "PROCESS: STOPPED"
+  statusEl.innerHTML = "STOPPED"
   if (state.running){
-    statusEl.innerHTML = `PROCESS: RUNNING ${processed.length}/${state.jobs.length}`
-    logEl.scrollTop = logEl.scrollHeight;
+    if (!state.currentline){
+      statusEl.innerHTML = `RUNNING (${processed.length}/${state.jobs.length})`
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    else{
+       statusEl.innerHTML = `RUNNING LINE (${state.currentline})`
+    }
   }
 
   if (processed.length>0){
@@ -84,19 +60,28 @@ async function onLoad(){
   await refresh(state)
 }
 async function saveConfig(){
-  const split = (str) => str.split(',').map(s => s.trim()).filter(s => s.length > 0);
-  config ={
-    duration:{
+  const prefiltersplit = (str) => str.split(',').map(s => s.trim()).filter(s => s.length > 0);
+
+  const linessplit = getElement("lines").value.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+
+  config = {
+    duration: {
       min:Number(getElement("minimum").value), 
       max:Number(getElement("maximum").value)
     }
     , header: {
-      or: split(getElement("or").value), 
-      and: split(getElement("and").value), 
-      and_not: split(getElement("and_not").value)
+      or: prefiltersplit(getElement("or").value), 
+      and: prefiltersplit(getElement("and").value), 
+      and_not: prefiltersplit(getElement("and_not").value)
     }
+    ,lines: linessplit
+    ,pages: [
+      {
+        name:"linkedin",
+        search:"https://www.linkedin.com/jobs/search-results/?keywords=@keywords&origin=SEMANTIC_SEARCH_LANDING_PAGE&geoId=91000011"
+      }
+    ]
   }
-  console.log("save_config config",config)
   await chrome.runtime.sendMessage({action: "save_config", config });
 }
 async function clean(){
@@ -105,21 +90,23 @@ async function clean(){
 }
 async function add(){
   await saveConfig();
-  await findjobsInTab();
+  await chrome.runtime.sendMessage({action: "add"});
 }
-async function edit(){
-  const jobs = await findjobsInInput()
+async function scan(){
+  await clean();
+  await chrome.runtime.sendMessage({action: "scan"});
+}
+async function update(){
+  const jobs = await findLinesInInput()
   await chrome.runtime.sendMessage({action: "update", jobs: jobs });
 }
-async function run(){
-  const jobs = await findjobsInInput()
-  await chrome.runtime.sendMessage({action: "update", jobs: jobs });
-  await chrome.runtime.sendMessage({action: "process"});
+async function openurls(){
+  await update()
+  await chrome.runtime.sendMessage({action: "openurls"});
 }
 async function download(){
   const state = await chrome.runtime.sendMessage({action: "get_state"});
-  const json = JSON.stringify(state.jobs, null, 2);
-  const blob = new Blob([json], {type: "application/json"});
+  const blob = new Blob([JSON.stringify(state.jobs, null, 2)], {type: "application/json"});
   const objUrl = URL.createObjectURL(blob);
   await chrome.downloads.download({url: objUrl, filename: "jobs.json"});
 }
@@ -127,8 +114,9 @@ async function download(){
 window.onload = async () => { onLoad()};
 chrome.runtime.onMessage.addListener(async (result) => {await refresh(result.state)});
 getElement("save_config").addEventListener("click", async () => {await saveConfig();});
-getElement("clean").addEventListener("click", async () => {await clean();});
+getElement("clean").addEventListener("click", async () => {await clean();}); 
 getElement("add").addEventListener("click", async () => {await add();}); 
-getElement("edit").addEventListener("click", async () => {await edit();});
-getElement("run").addEventListener("click", async () => {await run()});
+getElement("edit").addEventListener("click", async () => {await update();});
+getElement("scan").addEventListener("click", async () => {await scan();});
+getElement("openurls").addEventListener("click", async () => {await openurls()});
 getElement("download").addEventListener("click", async () => await download());

@@ -3,12 +3,14 @@
 <head>
 <style>
     body { font-family: Arial; width: 40rem; background: #121212; color: #fff; }
-    textarea { width: 100%; height: 8rem; background: #222; color: #fff; }
+    textarea { width: 100%; height: 6rem; background: #222; color: #fff; }
     button { padding: 0.5rem; background: #333; color: #fff; border: 1px solid #555; }
     input { width: 3rem; background: #222; color: #fff; }
     input.filter {width: 100%}
     table { width: 100%; margin-bottom: 10rem; }
-    #status { background-color: darkred; font-size: 2rem;}
+    .bg-red {background-color: darkred;}
+    .status {font-size: 2rem;}
+    input { width: 3rem; background: #222; color: #fff; }
   </style>
 </head>
 <body>
@@ -17,15 +19,17 @@
   <input id="and_not" class="filter" placeholder="AND NOT"></input>
   <input id="minimum" type="numeric" value="5000"></input>
   <input id="maximum" type="numeric" value="10000"></input>
+  <textarea id="lines" placeholder="LINES"></textarea>
   <button id="save_config">Save config</button>
   <button id="clean">Clear urls</button>
-  <button id="add">Search urls</button>
+  <button id="add">Extract urls</button>
+  <button id="scan" class="bg-red">Scan lines and Extract</button>
   <button id="edit">Edit and save urls</button>
   <div id="total">0</div>
   <textarea id="jobs"></textarea>
-  <button id="run">Run (visit and extract data)</button>
+  <button id="openurls">Run (Open urls and extract descriptions)</button>
   <button id="download">Download data</button>
-  <div id="status"></div>
+  <div id="status" class="status bg-red"></div>
   <textarea id="log"></textarea>
   <textarea id="last"></textarea>
 

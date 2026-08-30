@@ -13,11 +13,15 @@ export function emptyState(){
   return {
     running: false,
     jobs:[], 
-    config: {duration:{min: 5000, max: 10000}, header: {or: [],  and: [], and_not: []}
+    config: {
+      duration:{min: 5000, max: 10000}, 
+      header: {or: [],  and: [], and_not: []},
+      lines:[],
+      pages:[]  
   }}
 }
-export function newJob(url, source) {
-  return {url, source, header:'', description:'', error:''}
+export function newJob(url, source, header='') {
+  return {url, source, header, description:'', error:''}
 }
 
 export async function getState(){
